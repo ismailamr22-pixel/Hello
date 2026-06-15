@@ -1,0 +1,573 @@
+const {
+  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+  AlignmentType, LevelFormat, HeadingLevel, BorderStyle, WidthType,
+  ShadingType, PageBreak, VerticalAlign
+} = require('docx');
+const fs = require('fs');
+
+const BLUE = "1F4E8C";
+const LIGHT_BLUE = "D6E4F7";
+const MID_BLUE = "2E75B6";
+const WHITE = "FFFFFF";
+const DARK = "1A1A2E";
+const GRAY = "F4F7FB";
+const ACCENT = "E8A020";
+
+const border = { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" };
+const borders = { top: border, bottom: border, left: border, right: border };
+const noBorder = { style: BorderStyle.NIL };
+const noBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
+
+function heading1(text, color = WHITE, align = AlignmentType.LEFT) {
+  return new Paragraph({
+    spacing: { before: 0, after: 120 },
+    children: [new TextRun({ text, bold: true, size: 36, color, font: "Arial" })],
+    alignment: align,
+  });
+}
+
+function heading2(text, color = BLUE) {
+  return new Paragraph({
+    spacing: { before: 280, after: 100 },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: MID_BLUE, space: 4 } },
+    children: [new TextRun({ text, bold: true, size: 28, color, font: "Arial" })],
+  });
+}
+
+function heading2RTL(text, color = BLUE) {
+  return new Paragraph({
+    spacing: { before: 280, after: 100 },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: MID_BLUE, space: 4 } },
+    bidirectional: true,
+    alignment: AlignmentType.RIGHT,
+    children: [new TextRun({ text, bold: true, size: 28, color, font: "Arial", rightToLeft: true })],
+  });
+}
+
+function body(text, bold = false, color = DARK) {
+  return new Paragraph({
+    spacing: { before: 60, after: 60 },
+    children: [new TextRun({ text, bold, size: 22, color, font: "Arial" })],
+  });
+}
+
+function bodyRTL(text, bold = false, color = DARK) {
+  return new Paragraph({
+    spacing: { before: 60, after: 60 },
+    bidirectional: true,
+    alignment: AlignmentType.RIGHT,
+    children: [new TextRun({ text, bold, size: 22, color, font: "Arial", rightToLeft: true })],
+  });
+}
+
+function bulletItem(text, ref = "bullets") {
+  return new Paragraph({
+    numbering: { reference: ref, level: 0 },
+    spacing: { before: 50, after: 50 },
+    children: [new TextRun({ text, size: 22, font: "Arial", color: DARK })],
+  });
+}
+
+function bulletItemRTL(text, ref = "bulletsRTL") {
+  return new Paragraph({
+    numbering: { reference: ref, level: 0 },
+    spacing: { before: 50, after: 50 },
+    bidirectional: true,
+    alignment: AlignmentType.RIGHT,
+    children: [new TextRun({ text, size: 22, font: "Arial", color: DARK, rightToLeft: true })],
+  });
+}
+
+function spacer(lines = 1) {
+  return new Paragraph({ spacing: { before: 0, after: lines * 100 }, children: [new TextRun("")] });
+}
+
+function colorBanner(text, bg = BLUE, fg = WHITE, size = 30) {
+  return new Paragraph({
+    shading: { fill: bg, type: ShadingType.CLEAR },
+    spacing: { before: 160, after: 160 },
+    indent: { left: 200, right: 200 },
+    children: [new TextRun({ text, bold: true, size, color: fg, font: "Arial" })],
+  });
+}
+
+function colorBannerRTL(text, bg = BLUE, fg = WHITE, size = 30) {
+  return new Paragraph({
+    shading: { fill: bg, type: ShadingType.CLEAR },
+    spacing: { before: 160, after: 160 },
+    indent: { left: 200, right: 200 },
+    bidirectional: true,
+    alignment: AlignmentType.RIGHT,
+    children: [new TextRun({ text, bold: true, size, color: fg, font: "Arial", rightToLeft: true })],
+  });
+}
+
+function skillTagTable(tags) {
+  // Split into rows of 3
+  const rows = [];
+  for (let i = 0; i < tags.length; i += 3) {
+    const cells = tags.slice(i, i + 3).map(tag =>
+      new TableCell({
+        borders: noBorders,
+        shading: { fill: LIGHT_BLUE, type: ShadingType.CLEAR },
+        margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        width: { size: 3120, type: WidthType.DXA },
+        children: [new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new TextRun({ text: tag, bold: true, size: 20, color: BLUE, font: "Arial" })]
+        })]
+      })
+    );
+    // Pad to 3 cells
+    while (cells.length < 3) {
+      cells.push(new TableCell({
+        borders: noBorders,
+        width: { size: 3120, type: WidthType.DXA },
+        children: [new Paragraph({ children: [new TextRun("")] })]
+      }));
+    }
+    rows.push(new TableRow({ children: cells }));
+  }
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [3120, 3120, 3120],
+    rows,
+  });
+}
+
+function appCard(title, desc, features) {
+  const featureRows = features.map(f =>
+    new TableRow({
+      children: [
+        new TableCell({
+          borders: noBorders,
+          width: { size: 400, type: WidthType.DXA },
+          margins: { top: 40, bottom: 40, left: 80, right: 80 },
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "✔", size: 20, color: ACCENT, font: "Arial" })] })]
+        }),
+        new TableCell({
+          borders: noBorders,
+          width: { size: 8960, type: WidthType.DXA },
+          margins: { top: 40, bottom: 40, left: 80, right: 80 },
+          children: [new Paragraph({ children: [new TextRun({ text: f, size: 20, color: DARK, font: "Arial" })] })]
+        }),
+      ]
+    })
+  );
+
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [9360],
+    rows: [
+      new TableRow({
+        children: [new TableCell({
+          borders: { top: border, bottom: { style: BorderStyle.NIL }, left: { style: BorderStyle.SINGLE, size: 12, color: MID_BLUE }, right: border },
+          shading: { fill: GRAY, type: ShadingType.CLEAR },
+          margins: { top: 100, bottom: 100, left: 160, right: 160 },
+          width: { size: 9360, type: WidthType.DXA },
+          children: [
+            new Paragraph({ children: [new TextRun({ text: title, bold: true, size: 24, color: BLUE, font: "Arial" })] }),
+            new Paragraph({ spacing: { before: 60 }, children: [new TextRun({ text: desc, size: 20, color: "444444", font: "Arial", italics: true })] }),
+          ]
+        })]
+      }),
+      new TableRow({
+        children: [new TableCell({
+          borders: { top: { style: BorderStyle.NIL }, bottom: border, left: { style: BorderStyle.SINGLE, size: 12, color: MID_BLUE }, right: border },
+          margins: { top: 80, bottom: 100, left: 160, right: 160 },
+          width: { size: 9360, type: WidthType.DXA },
+          children: [
+            new Table({
+              width: { size: 9040, type: WidthType.DXA },
+              columnWidths: [400, 8640],
+              rows: featureRows,
+            })
+          ]
+        })]
+      }),
+    ]
+  });
+}
+
+function appCardRTL(title, desc, features) {
+  const featureRows = features.map(f =>
+    new TableRow({
+      children: [
+        new TableCell({
+          borders: noBorders,
+          width: { size: 8960, type: WidthType.DXA },
+          margins: { top: 40, bottom: 40, left: 80, right: 80 },
+          children: [new Paragraph({ bidirectional: true, alignment: AlignmentType.RIGHT, children: [new TextRun({ text: f, size: 20, color: DARK, font: "Arial", rightToLeft: true })] })]
+        }),
+        new TableCell({
+          borders: noBorders,
+          width: { size: 400, type: WidthType.DXA },
+          margins: { top: 40, bottom: 40, left: 80, right: 80 },
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "✔", size: 20, color: ACCENT, font: "Arial" })] })]
+        }),
+      ]
+    })
+  );
+
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [9360],
+    rows: [
+      new TableRow({
+        children: [new TableCell({
+          borders: { top: border, bottom: { style: BorderStyle.NIL }, right: { style: BorderStyle.SINGLE, size: 12, color: MID_BLUE }, left: border },
+          shading: { fill: GRAY, type: ShadingType.CLEAR },
+          margins: { top: 100, bottom: 100, left: 160, right: 160 },
+          width: { size: 9360, type: WidthType.DXA },
+          children: [
+            new Paragraph({ bidirectional: true, alignment: AlignmentType.RIGHT, children: [new TextRun({ text: title, bold: true, size: 24, color: BLUE, font: "Arial", rightToLeft: true })] }),
+            new Paragraph({ spacing: { before: 60 }, bidirectional: true, alignment: AlignmentType.RIGHT, children: [new TextRun({ text: desc, size: 20, color: "444444", font: "Arial", italics: true, rightToLeft: true })] }),
+          ]
+        })]
+      }),
+      new TableRow({
+        children: [new TableCell({
+          borders: { top: { style: BorderStyle.NIL }, bottom: border, right: { style: BorderStyle.SINGLE, size: 12, color: MID_BLUE }, left: border },
+          margins: { top: 80, bottom: 100, left: 160, right: 160 },
+          width: { size: 9360, type: WidthType.DXA },
+          children: [
+            new Table({
+              width: { size: 9040, type: WidthType.DXA },
+              columnWidths: [8640, 400],
+              rows: featureRows,
+            })
+          ]
+        })]
+      }),
+    ]
+  });
+}
+
+// ── ENGLISH SECTION ─────────────────────────────────────────────────────────────
+const englishChildren = [
+  // Header Banner
+  new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [9360],
+    rows: [new TableRow({ children: [new TableCell({
+      borders: noBorders,
+      shading: { fill: BLUE, type: ShadingType.CLEAR },
+      margins: { top: 300, bottom: 300, left: 400, right: 400 },
+      width: { size: 9360, type: WidthType.DXA },
+      children: [
+        heading1("MS Access Developer", WHITE, AlignmentType.LEFT),
+        new Paragraph({
+          children: [new TextRun({ text: "Database Solutions & Custom Business Applications", size: 22, color: LIGHT_BLUE, font: "Arial" })]
+        }),
+        spacer(),
+        new Paragraph({
+          children: [
+            new TextRun({ text: "10+ Years Experience  |  ", size: 20, color: WHITE, font: "Arial" }),
+            new TextRun({ text: "Clinic Management  |  ", size: 20, color: WHITE, font: "Arial" }),
+            new TextRun({ text: "Business Systems  |  ", size: 20, color: WHITE, font: "Arial" }),
+            new TextRun({ text: "Custom Reports", size: 20, color: WHITE, font: "Arial" }),
+          ]
+        }),
+      ]
+    })]})],
+  }),
+
+  spacer(2),
+
+  heading2("Professional Summary"),
+  body("I am a seasoned Microsoft Access developer with over 10 years of hands-on experience designing and building robust database applications tailored to real business needs. I specialize in clinic management systems, inventory solutions, and reception management tools — all built from scratch with clean UI, reliable data handling, and practical reporting."),
+  body("My systems are currently in active use by medical clinics and businesses, which means they are battle-tested and designed with real users in mind. I deliver solutions that are easy to use, fully documented, and ready to deploy."),
+
+  spacer(),
+
+  // Stats row
+  new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [3120, 3120, 3120],
+    rows: [new TableRow({
+      children: [
+        ["10+", "Years of Experience"],
+        ["5+", "Systems Delivered"],
+        ["100%", "Custom-Built Solutions"],
+      ].map(([num, label]) => new TableCell({
+        borders,
+        shading: { fill: LIGHT_BLUE, type: ShadingType.CLEAR },
+        margins: { top: 120, bottom: 120, left: 140, right: 140 },
+        width: { size: 3120, type: WidthType.DXA },
+        verticalAlign: VerticalAlign.CENTER,
+        children: [
+          new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: num, bold: true, size: 40, color: BLUE, font: "Arial" })] }),
+          new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: label, size: 18, color: "555555", font: "Arial" })] }),
+        ]
+      }))
+    })]
+  }),
+
+  spacer(),
+  heading2("Core Skills & Technologies"),
+  skillTagTable([
+    "Microsoft Access", "VBA Programming", "SQL / Queries",
+    "Form Design", "Report Builder", "Data Validation",
+    "Invoice Systems", "Patient Records", "Inventory Tracking",
+    "Dashboard Reports", "User Permissions", "System Integration",
+  ]),
+
+  spacer(),
+  heading2("Portfolio Projects"),
+  body("Below are real-world systems I have built and delivered:"),
+  spacer(),
+
+  appCard(
+    "Clinic Management System (sys_elshihab_final)",
+    "A full-featured clinic management application serving an active medical practice.",
+    [
+      "Complete patient records with medical history and visit logs",
+      "Invoicing and payment tracking with receipt printing",
+      "Custom reports: daily income, patient statistics, insurance summaries",
+      "User login system with role-based access control",
+      "Optimized for fast data entry by front desk staff",
+    ]
+  ),
+  spacer(),
+  appCard(
+    "El Gomhorya Organization System (system_elgomhorya)",
+    "A comprehensive management system for a multi-department organization.",
+    [
+      "Centralized data management across departments",
+      "Financial records and transaction tracking",
+      "Automated reporting for management review",
+      "Custom queries for fast record lookup",
+    ]
+  ),
+  spacer(),
+  appCard(
+    "Reception Management System (reception)",
+    "A streamlined front desk tool for managing client check-ins and daily operations.",
+    [
+      "Client registration and daily appointment tracking",
+      "Invoice generation and payment confirmation",
+      "End-of-day reports and shift summaries",
+      "Simple, intuitive interface for non-technical staff",
+    ]
+  ),
+  spacer(),
+  appCard(
+    "Business Inventory & Management System (4)",
+    "A tailored inventory and business management solution for product-based businesses.",
+    [
+      "Full product catalog with stock level tracking",
+      "Purchase and sales order management",
+      "Low-stock alerts and inventory reports",
+      "Profit/loss dashboards and financial summaries",
+    ]
+  ),
+  spacer(),
+  appCard(
+    "Clinic System — El Gomhorya Branch (clinic)",
+    "A clinic-specific application built for efficient patient and billing management.",
+    [
+      "Patient intake forms and record management",
+      "Billing system with itemized invoices",
+      "Doctor and appointment scheduling support",
+      "Printable reports for clinic administration",
+    ]
+  ),
+
+  spacer(),
+  heading2("What You Get When You Hire Me"),
+  bulletItem("A fully custom MS Access application built to your exact requirements"),
+  bulletItem("Clean, professional UI that your staff can learn in minutes"),
+  bulletItem("All core reports included: daily, monthly, financial, inventory"),
+  bulletItem("Data security with user login and permission levels"),
+  bulletItem("Full handover with documentation and training if needed"),
+  bulletItem("Ongoing support and modifications available"),
+
+  spacer(),
+  colorBanner("Ready to build your custom database solution? Let's talk.", MID_BLUE, WHITE, 22),
+];
+
+// ── ARABIC SECTION ───────────────────────────────────────────────────────────────
+const arabicChildren = [
+  new Paragraph({ children: [new TextRun({ text: "", break: 1 })], pageBreakBefore: true }),
+
+  // Header Banner Arabic
+  new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [9360],
+    rows: [new TableRow({ children: [new TableCell({
+      borders: noBorders,
+      shading: { fill: BLUE, type: ShadingType.CLEAR },
+      margins: { top: 300, bottom: 300, left: 400, right: 400 },
+      width: { size: 9360, type: WidthType.DXA },
+      children: [
+        new Paragraph({
+          bidirectional: true,
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: "مطور قواعد بيانات MS Access", bold: true, size: 36, color: WHITE, font: "Arial", rightToLeft: true })]
+        }),
+        new Paragraph({
+          bidirectional: true,
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: "حلول قواعد البيانات وتطبيقات الأعمال المخصصة", size: 22, color: LIGHT_BLUE, font: "Arial", rightToLeft: true })]
+        }),
+        spacer(),
+        new Paragraph({
+          bidirectional: true,
+          alignment: AlignmentType.RIGHT,
+          children: [
+            new TextRun({ text: "خبرة +10 سنوات  |  إدارة العيادات  |  أنظمة الأعمال  |  تقارير مخصصة", size: 20, color: WHITE, font: "Arial", rightToLeft: true }),
+          ]
+        }),
+      ]
+    })]})],
+  }),
+
+  spacer(2),
+
+  heading2RTL("نبذة مهنية"),
+  bodyRTL("أنا مطور Microsoft Access محترف بخبرة تزيد عن 10 سنوات في تصميم وبناء تطبيقات قواعد بيانات متكاملة تلبي الاحتياجات الفعلية للأعمال. أتخصص في أنظمة إدارة العيادات، وحلول المخزون، وأنظمة الاستقبال — وجميعها مبنية من الصفر بواجهة مستخدم نظيفة وتعامل موثوق مع البيانات وتقارير عملية."),
+  bodyRTL("أنظمتي قيد الاستخدام الفعلي حاليًا في عيادات طبية وشركات، مما يعني أنها مجربة وميدانية ومصممة مع مراعاة المستخدم الحقيقي. أقدم حلولًا سهلة الاستخدام، موثقة بالكامل، وجاهزة للنشر الفوري."),
+
+  spacer(),
+
+  // Stats RTL
+  new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [3120, 3120, 3120],
+    rows: [new TableRow({
+      children: [
+        ["+10", "سنوات خبرة"],
+        ["+5", "أنظمة مُسلَّمة"],
+        ["100%", "حلول مخصصة"],
+      ].map(([num, label]) => new TableCell({
+        borders,
+        shading: { fill: LIGHT_BLUE, type: ShadingType.CLEAR },
+        margins: { top: 120, bottom: 120, left: 140, right: 140 },
+        width: { size: 3120, type: WidthType.DXA },
+        verticalAlign: VerticalAlign.CENTER,
+        children: [
+          new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: num, bold: true, size: 40, color: BLUE, font: "Arial" })] }),
+          new Paragraph({ alignment: AlignmentType.CENTER, bidirectional: true, children: [new TextRun({ text: label, size: 18, color: "555555", font: "Arial", rightToLeft: true })] }),
+        ]
+      }))
+    })]
+  }),
+
+  spacer(),
+  heading2RTL("المهارات والتقنيات الأساسية"),
+  skillTagTable([
+    "Microsoft Access", "VBA برمجة", "SQL / استعلامات",
+    "تصميم النماذج", "بناء التقارير", "التحقق من البيانات",
+    "أنظمة الفواتير", "سجلات المرضى", "تتبع المخزون",
+    "تقارير لوحة التحكم", "صلاحيات المستخدمين", "تكامل الأنظمة",
+  ]),
+
+  spacer(),
+  heading2RTL("مشاريع في ملف الأعمال"),
+  bodyRTL("فيما يلي أنظمة حقيقية قمت ببنائها وتسليمها:"),
+  spacer(),
+
+  appCardRTL(
+    "نظام إدارة عيادة الشهاب (sys_elshihab_final)",
+    "تطبيق متكامل لإدارة العيادات يخدم ممارسة طبية نشطة.",
+    [
+      "سجلات المرضى الكاملة مع التاريخ الطبي وسجلات الزيارات",
+      "تتبع الفواتير والمدفوعات مع طباعة الإيصالات",
+      "تقارير مخصصة: الدخل اليومي، إحصائيات المرضى، ملخصات التأمين",
+      "نظام تسجيل دخول بصلاحيات مبنية على الأدوار",
+      "محسّن لإدخال البيانات السريع من قِبل موظفي الاستقبال",
+    ]
+  ),
+  spacer(),
+  appCardRTL(
+    "نظام الجمهورية الإداري (system_elgomhorya)",
+    "نظام إدارة شامل لمؤسسة متعددة الأقسام.",
+    [
+      "إدارة بيانات مركزية عبر الأقسام",
+      "السجلات المالية وتتبع المعاملات",
+      "تقارير آلية لمراجعة الإدارة",
+      "استعلامات مخصصة للبحث السريع عن السجلات",
+    ]
+  ),
+  spacer(),
+  appCardRTL(
+    "نظام إدارة الاستقبال (reception)",
+    "أداة استقبال مبسطة لإدارة تسجيل العملاء والعمليات اليومية.",
+    [
+      "تسجيل العملاء وتتبع المواعيد اليومية",
+      "إنشاء الفواتير وتأكيد الدفع",
+      "تقارير نهاية اليوم وملخصات الوردية",
+      "واجهة بسيطة وسهلة للموظفين غير التقنيين",
+    ]
+  ),
+  spacer(),
+  appCardRTL(
+    "نظام المخزون وإدارة الأعمال (4)",
+    "حل مخصص للمخزون وإدارة الأعمال للشركات القائمة على المنتجات.",
+    [
+      "كتالوج منتجات كامل مع تتبع مستويات المخزون",
+      "إدارة أوامر الشراء والمبيعات",
+      "تنبيهات المخزون المنخفض وتقارير المخزون",
+      "لوحات تحكم الربح/الخسارة والملخصات المالية",
+    ]
+  ),
+  spacer(),
+  appCardRTL(
+    "نظام العيادة — فرع الجمهورية (clinic)",
+    "تطبيق خاص بالعيادة مبني لإدارة المرضى والفواتير بكفاءة.",
+    [
+      "نماذج استقبال المرضى وإدارة السجلات",
+      "نظام فوترة مع فواتير مفصّلة",
+      "دعم جدول المواعيد للأطباء",
+      "تقارير قابلة للطباعة لإدارة العيادة",
+    ]
+  ),
+
+  spacer(),
+  heading2RTL("ماذا ستحصل عند توظيفي"),
+  bulletItemRTL("تطبيق MS Access مخصص بالكامل وفق متطلباتك الدقيقة"),
+  bulletItemRTL("واجهة مستخدم نظيفة واحترافية يتعلمها موظفوك في دقائق"),
+  bulletItemRTL("جميع التقارير الأساسية مشمولة: يومية، شهرية، مالية، مخزون"),
+  bulletItemRTL("أمان البيانات بتسجيل الدخول ومستويات الصلاحيات"),
+  bulletItemRTL("تسليم كامل مع توثيق وتدريب عند الحاجة"),
+  bulletItemRTL("دعم مستمر والتعديلات متاحة"),
+
+  spacer(),
+  colorBannerRTL("هل أنت مستعد لبناء حل قاعدة بيانات مخصص؟ لنتحدث.", MID_BLUE, WHITE, 22),
+];
+
+// ── BUILD DOCUMENT ───────────────────────────────────────────────────────────────
+const doc = new Document({
+  numbering: {
+    config: [
+      {
+        reference: "bullets",
+        levels: [{
+          level: 0, format: LevelFormat.BULLET, text: "•", alignment: AlignmentType.LEFT,
+          style: { paragraph: { indent: { left: 720, hanging: 360 } }, run: { color: MID_BLUE } }
+        }]
+      },
+      {
+        reference: "bulletsRTL",
+        levels: [{
+          level: 0, format: LevelFormat.BULLET, text: "•", alignment: AlignmentType.RIGHT,
+          style: { paragraph: { indent: { right: 720, hanging: 360 }, bidirectional: true }, run: { color: MID_BLUE } }
+        }]
+      },
+    ]
+  },
+  sections: [{
+    properties: {
+      page: {
+        size: { width: 12240, height: 15840 },
+        margin: { top: 1080, right: 1080, bottom: 1080, left: 1080 }
+      }
+    },
+    children: [...englishChildren, ...arabicChildren]
+  }]
+});
+
+Packer.toBuffer(doc).then(buffer => {
+  fs.writeFileSync("/mnt/user-data/outputs/upwork_portfolio.docx", buffer);
+  console.log("Done! File written.");
+});
